@@ -7,9 +7,19 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./Escrow.sol";
 
 contract Marketplace is Ownable, ReentrancyGuard {
-    // Order structure
+    struct Product {
+        uint256 id;
+        string name;
+        string description;
+        uint256 pricePerUnit; // Price per unit in wei
+        uint256 availableQuantity;
+        address farmer;
+        bool isActive;
+    }
+
     struct Order {
         uint256 id;
+        uint256 productId;     
         address farmer;
         address buyer;
         uint256 amount;
@@ -18,84 +28,115 @@ contract Marketplace is Ownable, ReentrancyGuard {
         bool isCompleted;
         bool isCancelled;
         uint256 createdAt;
-        uint256 expiryTime;
-    }
-
-    // Review structure
-    struct Review {
-        uint8 rating; // 1-5
-        string reviewText;
-        address reviewer;
-        uint256 timestamp;
-        uint256 orderId;
-    }
-
-    // User reputation structure
-    struct UserReputation {
-        uint256 totalRating;
-        uint256 reviewCount;
-        mapping(uint256 => bool) reviewedOrders; // orderId => reviewed
     }
 
     uint256 private _orderCounter;
+    uint256 private _productCounter;
     uint256 public constant ORDER_EXPIRY = 30 days;
     
+    mapping(uint256 => Product) public products;
     mapping(uint256 => Order) public orders;
-    mapping(address => UserReputation) public userReputations;
-    mapping(uint256 => Review) public reviews; // orderId => Review
+    mapping(address => uint256[]) public farmerProducts; // farmer => product IDs
+    mapping(uint256 => uint256[]) public productOrders; // productId => order IDs
     
     Escrow public immutable escrow;
 
-    // Events
+    event ProductCreated(uint256 indexed productId, address indexed farmer);
     event OrderCreated(uint256 id, uint256 escrowId, address farmer, address buyer);
     event OrderCompleted(uint256 id);
     event OrderCancelled(uint256 id);
-    event DisputeRaised(uint256 orderId);
-    event ReviewSubmitted(uint256 orderId, address reviewer, address reviewedUser, uint8 rating, string reviewText);
-    event ReputationUpdated(address user, uint256 averageRating, uint256 reviewCount);
 
     constructor(IERC20 _paymentToken) Ownable(msg.sender) {
         escrow = new Escrow(_paymentToken, address(this));
     }
 
-    // Order functions
-    function createOrder(address _buyer, uint256 _amount, uint256 _price) 
-        external 
-        nonReentrant 
-        returns (uint256) 
-    {
-        require(_buyer != address(0), "Invalid buyer");
-        require(_amount > 0 && _price > 0, "Invalid amount/price");
+    // Product Management Functions
+    function createProduct(
+        string memory _name,
+        string memory _description,
+        uint256 _pricePerUnit,
+        uint256 _initialQuantity
+    ) external nonReentrant returns (uint256) {
+        require(bytes(_name).length > 0, "Name required");
+        require(_pricePerUnit > 0, "Price must be positive");
+        require(_initialQuantity > 0, "Quantity must be positive");
         
-        uint256 totalValue = _amount * _price;
-        uint256 escrowId = escrow.createEscrow(msg.sender, _buyer, totalValue);
+        _productCounter++;
+        products[_productCounter] = Product({
+            id: _productCounter,
+            name: _name,
+            description: _description,
+            pricePerUnit: _pricePerUnit,
+            availableQuantity: _initialQuantity,
+            farmer: msg.sender,
+            isActive: true
+        });
+        
+        farmerProducts[msg.sender].push(_productCounter);
+        
+        emit ProductCreated(_productCounter, msg.sender);
+        return _productCounter;
+    }
+
+    function updateProduct(
+        uint256 _productId,
+        string memory _name,
+        string memory _description,
+        uint256 _pricePerUnit,
+        uint256 _availableQuantity
+    ) external nonReentrant {
+        Product storage product = products[_productId];
+        require(product.farmer == msg.sender, "Only product owner");
+        require(product.isActive, "Product inactive");
+        
+        product.name = _name;
+        product.description = _description;
+        product.pricePerUnit = _pricePerUnit;
+        product.availableQuantity = _availableQuantity;
+    }
+
+    function deactivateProduct(uint256 _productId) external {
+        Product storage product = products[_productId];
+        require(product.farmer == msg.sender, "Only product owner");
+        require(product.isActive, "Already inactive");
+        
+        product.isActive = false;
+    }
+
+    function createOrder(uint256 _productId, uint256 _amount) external nonReentrant returns (uint256) {
+        Product storage product = products[_productId];
+        require(product.isActive, "Product unavailable");
+        require(product.availableQuantity >= _amount, "Insufficient stock");
+        
+        uint256 totalValue = _amount * product.pricePerUnit;
+        uint256 escrowId = escrow.createEscrow(product.farmer, msg.sender, totalValue);
 
         _orderCounter++;
         orders[_orderCounter] = Order({
             id: _orderCounter,
-            farmer: msg.sender,
-            buyer: _buyer,
+            productId: _productId,
+            farmer: product.farmer,
+            buyer: msg.sender,
             amount: _amount,
-            price: _price,
+            price: product.pricePerUnit,
             escrowId: escrowId,
             isCompleted: false,
             isCancelled: false,
-            createdAt: block.timestamp,
-            expiryTime: block.timestamp + ORDER_EXPIRY
+            createdAt: block.timestamp
         });
 
-        emit OrderCreated(_orderCounter, escrowId, msg.sender, _buyer);
+        product.availableQuantity -= _amount;
+        productOrders[_productId].push(_orderCounter);
+        
+        emit OrderCreated(_orderCounter, escrowId, product.farmer, msg.sender);
         return _orderCounter;
     }
 
-    function completeOrder(uint256 _orderId) external nonReentrant {
+    function completeOrder (uint256 _orderId) external nonReentrant {
         Order storage order = orders[_orderId];
         require(order.id != 0, "Invalid order");
-        require(msg.sender == order.buyer || msg.sender == owner(), "Unauthorized");
-        require(!order.isCompleted && !order.isCancelled, "Order closed");
-        require(block.timestamp <= order.expiryTime, "Order expired");
-
-        escrow.completeEscrow(order.escrowId);
+        
+        escrow.completeEscrow(_orderId);
         order.isCompleted = true;
         
         emit OrderCompleted(_orderId);
@@ -104,124 +145,44 @@ contract Marketplace is Ownable, ReentrancyGuard {
     function cancelOrder(uint256 _orderId) external nonReentrant {
         Order storage order = orders[_orderId];
         require(order.id != 0, "Invalid order");
-        require(
-            msg.sender == order.buyer || 
-            msg.sender == order.farmer || 
-            msg.sender == owner(),
-            "Unauthorized"
-        );
-        require(!order.isCompleted && !order.isCancelled, "Order closed");
-
-        escrow.refundEscrow(order.escrowId);
+        
+        escrow.refundEscrow(_orderId);
         order.isCancelled = true;
         
         emit OrderCancelled(_orderId);
     }
 
-    function cancelExpired(uint256 _orderId) external nonReentrant {
-        Order storage order = orders[_orderId];
-        require(order.id != 0, "Invalid order");
-        require(block.timestamp > order.expiryTime, "Not expired");
-        require(!order.isCompleted && !order.isCancelled, "Order closed");
-
-        escrow.refundEscrow(order.escrowId);
-        order.isCancelled = true;
-        
-        emit OrderCancelled(_orderId);
+    function getProduct(uint256 _productId) public view returns (Product memory) {
+        return products[_productId];
     }
 
-    // Dispute functions
-    function raiseDispute(uint256 _orderId) external {
-        Order storage order = orders[_orderId];
-        require(msg.sender == order.buyer, "Only buyer");
-        require(block.timestamp <= order.expiryTime, "Order expired");
-        escrow.raiseDispute(order.escrowId);
-        emit DisputeRaised(_orderId);
+    function getActiveProducts() public view returns (Product[] memory) {
+        uint256 activeCount = 0;
+        for (uint256 i = 1; i <= _productCounter; i++) {
+            if (products[i].isActive) {
+                activeCount++;
+            }
+        }
+        
+        Product[] memory activeProducts = new Product[](activeCount);
+        uint256 index = 0;
+        for (uint256 i = 1; i <= _productCounter; i++) {
+            if (products[i].isActive) {
+                activeProducts[index] = products[i];
+                index++;
+            }
+        }
+        return activeProducts;
     }
 
-    function resolveDispute(uint256 _orderId, bool _approve) external onlyOwner {
-        Order storage order = orders[_orderId];
-        escrow.resolveDispute(order.escrowId, _approve);
-        order.isCompleted = _approve;
-        order.isCancelled = !_approve;
-    }
-
-    // Reputation functions
-    function submitReview(
-        uint256 _orderId,
-        uint8 _rating,
-        string calldata _reviewText
-    ) external nonReentrant {
-        Order storage order = orders[_orderId];
-        require(order.isCompleted, "Order not completed");
-        require(_rating >= 1 && _rating <= 5, "Rating must be 1-5");
+    function getOrdersForProduct(uint256 _productId) public view returns (Order[] memory) {
+        uint256[] storage orderIds = productOrders[_productId];
+        Order[] memory productOrdersList = new Order[](orderIds.length);
         
-        // Ensure the caller is either buyer or farmer of this order
-        require(
-            msg.sender == order.buyer || msg.sender == order.farmer,
-            "Not order participant"
-        );
+        for (uint256 i = 0; i < orderIds.length; i++) {
+            productOrdersList[i] = orders[orderIds[i]];
+        }
         
-        // Ensure this order hasn't been reviewed by this user already
-        UserReputation storage reviewerRep = userReputations[msg.sender];
-        require(!reviewerRep.reviewedOrders[_orderId], "Already reviewed");
-        
-        // Determine who is being reviewed (opposite party)
-        address reviewedUser = msg.sender == order.buyer ? order.farmer : order.buyer;
-        
-        // Update the reviewed user's reputation
-        UserReputation storage reputation = userReputations[reviewedUser];
-        reputation.totalRating += _rating;
-        reputation.reviewCount += 1;
-        reputation.reviewedOrders[_orderId] = true;
-        
-        // Store the review details
-        reviews[_orderId] = Review({
-            rating: _rating,
-            reviewText: _reviewText,
-            reviewer: msg.sender,
-            timestamp: block.timestamp,
-            orderId: _orderId
-        });
-        
-        emit ReviewSubmitted(
-            _orderId,
-            msg.sender,
-            reviewedUser,
-            _rating,
-            _reviewText
-        );
-        
-        emit ReputationUpdated(
-            reviewedUser, 
-            getAverageRating(reviewedUser), 
-            reputation.reviewCount
-        );
-    }
-
-    // View functions
-    function getOrderStatus(uint256 _orderId) external view returns (string memory) {
-        Order memory order = orders[_orderId];
-        if (order.isCompleted) return "Completed";
-        if (order.isCancelled) return "Cancelled";
-        if (block.timestamp > order.expiryTime) return "Expired";
-        return "Active";
-    }
-
-    function getAverageRating(address _user) public view returns (uint256) {
-        UserReputation storage rep = userReputations[_user];
-        return rep.reviewCount > 0 ? rep.totalRating / rep.reviewCount : 0;
-    }
-
-    function getReview(uint256 _orderId) public view returns (Review memory) {
-        return reviews[_orderId];
-    }
-
-    function hasReviewedOrder(address _user, uint256 _orderId) public view returns (bool) {
-        return userReputations[_user].reviewedOrders[_orderId];
-    }
-
-    function getTotalOrders() public view returns (uint256) {
-        return _orderCounter;
+        return productOrdersList;
     }
 }

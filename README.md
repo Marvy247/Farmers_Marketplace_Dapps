@@ -97,3 +97,7 @@ Contributions are welcome. Please open issues or pull requests for improvements 
 ## Contact
 
 For questions or support, please contact the project maintainer.
+
+UtilityToken deployed at: 0xA8B0A977098463E58630C50e6A5D218e505932f5
+Marketplace deployed at: 0x7dd9F0511A4718eff1eBF1dC50FCB383955c706D
+Escrow deployed at: 0xfCFc3A73044B5431388b184Dd745fFeaD9Ee9B5A

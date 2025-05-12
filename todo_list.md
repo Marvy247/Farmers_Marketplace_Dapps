@@ -19,14 +19,14 @@ This todo list outlines the steps required to implement the decentralized market
 
 ## 3. Testing
 
-[ ] Write unit tests for each smart contract using Foundry's testing framework (Forge)  
-[ ] Test the escrow functionality to ensure secure payment handling  
-[ ] Validate the reputation system and ensure ratings are recorded correctly  
-[ ] Conduct integration tests for the entire marketplace workflow
+[done] Write unit tests for each smart contract using Foundry's testing framework (Forge)  
+[done] Test the escrow functionality to ensure secure payment handling  
+[done] Validate the reputation system and ensure ratings are recorded correctly  
+[done] Conduct integration tests for the entire marketplace workflow
 
 ## 4. Deployment
 
-[ ] Script the deployment of contracts using Foundry  
+[done] Script the deployment of contracts using Foundry  
 [ ] Set up continuous integration for automated testing and deployment
 
 ## 5. Frontend Development

@@ -2,6 +2,60 @@
 cache/
 out/
 
+# Node modules
+node_modules/
+
+# Build files
+dist/
+
+# Coverage files
+coverage/
+
+# Logs
+logs/
+
+# Ignore all log files
+*.log
+
+# Ignore all log files in the logs directory
+logs/*
+
+# Ignore all log files in the coverage directory
+coverage/*
+
+# Ignore all log files in the dist directory
+dist/*
+
+# Ignore all log files in the out directory
+out/*
+
+# Ignore all log files in the node_modules directory
+node_modules/*
+
+# Ignore all log files in the cache directory
+cache/*
+
+# Ignore all log files in the .next directory
+.next/
+
+# Ignore all log files in the .vercel directory
+.vercel/
+
+# Ignore all log files in the .turbo directory
+.turbo/
+
+# Ignore all log files in the .idea directory
+.idea/
+
+# Ignore all log files in the .vscode directory
+.vscode/
+
+# Ignore all log files in the .DS_Store directory
+.DS_Store
+
+# Ignore all log files in the .env directory
+.env.local
+
 # Ignores development broadcast logs
 !/broadcast
 /broadcast/*/31337/
