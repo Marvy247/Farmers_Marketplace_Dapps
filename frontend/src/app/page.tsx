@@ -8,14 +8,18 @@ import FarmerDashboard from "../components/organisms/FarmerDashboard";
 import BuyerDashboard from "../components/organisms/BuyerDashboard";
 import { ContractProvider, useContract } from "../context/ContractContext";
 
-const HomeContent = () => {
+const HomeContent = ({
+  userType,
+  setUserType,
+  refreshMarketplace,
+  triggerRefreshMarketplace,
+}: {
+  userType: "seller" | "buyer" | null;
+  setUserType: (type: "seller" | "buyer" | null) => void;
+  refreshMarketplace: boolean;
+  triggerRefreshMarketplace: () => void;
+}) => {
   const { isConnected, isLoading } = useContract();
-  const [userType, setUserType] = useState<"seller" | "buyer" | null>(null);
-  const [refreshMarketplace, setRefreshMarketplace] = useState(false);
-
-  const triggerRefreshMarketplace = useCallback(() => {
-    setRefreshMarketplace((prev) => !prev);
-  }, []);
 
   if (isLoading) {
     return (
@@ -45,12 +49,24 @@ const HomeContent = () => {
 };
 
 export default function Home() {
+  const [userType, setUserType] = useState<"seller" | "buyer" | null>(null);
+  const [refreshMarketplace, setRefreshMarketplace] = useState(false);
+
+  const triggerRefreshMarketplace = useCallback(() => {
+    setRefreshMarketplace((prev) => !prev);
+  }, []);
+
   return (
     <ContractProvider>
       <div className="flex flex-col min-h-screen bg-gray-50">
-        <Header />
+        <Header userType={userType} setUserType={setUserType} />
         <main className="flex-grow px-4 sm:px-6 lg:px-8">
-          <HomeContent />
+          <HomeContent
+            userType={userType}
+            setUserType={setUserType}
+            refreshMarketplace={refreshMarketplace}
+            triggerRefreshMarketplace={triggerRefreshMarketplace}
+          />
         </main>
         <Footer />
       </div>

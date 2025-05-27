@@ -1,13 +1,17 @@
 "use client";
 import React, { useState } from "react";
 import { Contract, parseUnits } from "ethers";
-import MarketplaceABI from "../../lib/abis/Marketplace.json";
+import MarketplaceABI from "../../../lib/abis/Marketplace.json";
 import { useContract } from "../../context/ContractContext";
-import { FiPackage, FiEdit3, FiDollarSign, FiLoader, FiCalendar, FiMapPin, FiCheck } from "react-icons/fi";
+import { FiPackage, FiEdit3, FiDollarSign, FiLoader, FiCalendar, FiMapPin, FiCheck, FiImage } from "react-icons/fi";
 
 const MARKETPLACE_ADDRESS = "0x7dd9F0511A4718eff1eBF1dC50FCB383955c706D";
 
-const FarmerProductCreate: React.FC = () => {
+interface FarmerProductCreateProps {
+  onProductCreated: () => void;
+}
+
+const FarmerProductCreate: React.FC<FarmerProductCreateProps> = ({ onProductCreated }) => {
   const { signer, account } = useContract();
   const [formData, setFormData] = useState({
     name: "",
@@ -16,11 +20,12 @@ const FarmerProductCreate: React.FC = () => {
     unit: "kg", // Default unit
     pricePerUnit: "",
     initialQuantity: "",
-    imageHash: "", // IPFS hash for product image
     location: "",
     harvestDate: "",
     isOrganic: false
   });
+
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [creatingProduct, setCreatingProduct] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -36,6 +41,39 @@ const FarmerProductCreate: React.FC = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setImageFile(e.target.files[0]);
+    } else {
+      setImageFile(null);
+    }
+  };
+
+  const isValidDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const now = new Date();
+    return !isNaN(date.getTime()) && date >= now;
+  };
+
+  const isFormValid = () => {
+    const requiredFields = ['name', 'description', 'pricePerUnit', 'initialQuantity', 'location', 'harvestDate'];
+    for (const field of requiredFields) {
+      if (!formData[field as keyof typeof formData]) {
+        return false;
+      }
+    }
+    if (parseFloat(formData.pricePerUnit) <= 0 || parseFloat(formData.initialQuantity) <= 0) {
+      return false;
+    }
+    if (!isValidDate(formData.harvestDate)) {
+      return false;
+    }
+    if (!imageFile) {
+      return false;
+    }
+    return true;
   };
 
   const createProduct = async () => {
@@ -58,6 +96,16 @@ const FarmerProductCreate: React.FC = () => {
       return;
     }
 
+    if (!isValidDate(formData.harvestDate)) {
+      setError("Harvest date must be a valid date and not in the past.");
+      return;
+    }
+
+    if (!imageFile) {
+      setError("Please select a product image.");
+      return;
+    }
+
     setCreatingProduct(true);
     setError(null);
     setSuccessMessage(null);
@@ -73,6 +121,9 @@ const FarmerProductCreate: React.FC = () => {
       const quantity = parseInt(formData.initialQuantity, 10);
       const harvestTimestamp = Math.floor(new Date(formData.harvestDate).getTime() / 1000);
 
+      // Since image upload is not handled here, pass empty string for imageHash
+      const imageHashPlaceholder = "";
+
       const tx = await marketplaceContract.createProduct(
         formData.name,
         formData.description,
@@ -80,7 +131,7 @@ const FarmerProductCreate: React.FC = () => {
         formData.unit,
         priceInWei,
         quantity,
-        formData.imageHash,
+        imageHashPlaceholder,
         formData.location,
         harvestTimestamp,
         formData.isOrganic
@@ -88,7 +139,7 @@ const FarmerProductCreate: React.FC = () => {
       
       await tx.wait();
 
-      // Reset form
+      // Reset form and image file
       setFormData({
         name: "",
         description: "",
@@ -96,16 +147,21 @@ const FarmerProductCreate: React.FC = () => {
         unit: "kg",
         pricePerUnit: "",
         initialQuantity: "",
-        imageHash: "",
         location: "",
         harvestDate: "",
         isOrganic: false
       });
+      setImageFile(null);
 
       setSuccessMessage("Product created successfully!");
+      onProductCreated();
     } catch (error) {
       console.error("Product creation failed:", error);
-      setError(`Product creation failed: ${(error as Error).message}`);
+      if ((error as Error).message.includes("revert")) {
+        setError("Product creation failed due to contract revert. Please check your inputs.");
+      } else {
+        setError(`Product creation failed: ${(error as Error).message}`);
+      }
     } finally {
       setCreatingProduct(false);
     }
@@ -141,7 +197,7 @@ const FarmerProductCreate: React.FC = () => {
               placeholder="Product Name (e.g., Organic Tomatoes)"
               value={formData.name}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none"
+              className="flex-1 px-3 py-2 outline-none placeholder-gray-400"
               disabled={creatingProduct}
             />
           </div>
@@ -156,7 +212,7 @@ const FarmerProductCreate: React.FC = () => {
               placeholder="Product Description"
               value={formData.description}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none"
+              className="flex-1 px-3 py-2 outline-none placeholder-gray-400"
               disabled={creatingProduct}
             />
           </div>
@@ -169,7 +225,7 @@ const FarmerProductCreate: React.FC = () => {
               name="category"
               value={formData.category}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none bg-white"
+              className="flex-1 px-3 py-2 outline-none bg-white text-gray-500"
               disabled={creatingProduct}
             >
               {categories.map(category => (
@@ -186,7 +242,7 @@ const FarmerProductCreate: React.FC = () => {
               name="unit"
               value={formData.unit}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none bg-white"
+              className="flex-1 px-3 py-2 outline-none bg-white text-gray-500"
               disabled={creatingProduct}
             >
               {units.map(unit => (
@@ -208,7 +264,7 @@ const FarmerProductCreate: React.FC = () => {
               placeholder="Price per Unit (ETH)"
               value={formData.pricePerUnit}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none"
+              className="flex-1 px-3 py-2 outline-none placeholder-gray-400"
               disabled={creatingProduct}
               min="0"
               step="0.01"
@@ -225,7 +281,7 @@ const FarmerProductCreate: React.FC = () => {
               placeholder="Available Quantity"
               value={formData.initialQuantity}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none"
+              className="flex-1 px-3 py-2 outline-none placeholder-gray-400"
               disabled={creatingProduct}
               min="1"
               step="1"
@@ -242,7 +298,7 @@ const FarmerProductCreate: React.FC = () => {
               placeholder="Farm Location (e.g., California, USA)"
               value={formData.location}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none"
+              className="flex-1 px-3 py-2 outline-none placeholder-gray-400"
               disabled={creatingProduct}
             />
           </div>
@@ -257,13 +313,13 @@ const FarmerProductCreate: React.FC = () => {
               placeholder="Harvest Date"
               value={formData.harvestDate}
               onChange={handleChange}
-              className="flex-1 px-3 py-2 outline-none"
+              className="flex-1 px-3 py-2 outline-none placeholder-gray-400 text-gray-500"
               disabled={creatingProduct}
             />
           </div>
 
           <div className="flex items-center border rounded-lg overflow-hidden p-3">
-            <label className="flex items-center space-x-2 cursor-pointer">
+            <label className="flex items-center space-x-2 cursor-pointer text-gray-700">
               <input
                 type="checkbox"
                 name="isOrganic"
@@ -278,18 +334,20 @@ const FarmerProductCreate: React.FC = () => {
         </div>
       </div>
 
-      {/* Image Upload (would connect to IPFS in a real implementation) */}
+      {/* Image Upload (Local File) */}
       <div className="mt-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Product Image (IPFS Hash)</label>
-        <input
-          type="text"
-          name="imageHash"
-          placeholder="Qm... (IPFS hash after upload)"
-          value={formData.imageHash}
-          onChange={handleChange}
-          className="w-full px-3 py-2 border rounded-lg"
-          disabled={creatingProduct}
-        />
+        <div className="flex items-center border rounded-lg overflow-hidden">
+          <span className="bg-gray-100 p-3 text-gray-500">
+            <FiImage />
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            className="flex-1 px-3 py-2 outline-none placeholder-gray-400"
+            disabled={creatingProduct}
+          />
+        </div>
       </div>
 
       {/* Submit Button */}

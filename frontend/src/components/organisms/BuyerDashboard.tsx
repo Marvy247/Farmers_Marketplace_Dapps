@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import Marketplace from '../molecules/Marketplace';
+import BuyerOrders from '../molecules/BuyerOrders';
 import { ShoppingBag, ClipboardList, Star } from 'lucide-react';
 
 interface BuyerDashboardProps {
@@ -51,11 +52,8 @@ const BuyerDashboard: React.FC<BuyerDashboardProps> = ({ refreshMarketplace }) =
           <Marketplace refreshTrigger={refreshMarketplace} />
         </div>
 
-        {/* Future Orders Section */}
-        <div className="bg-gray-50 p-6 rounded-lg border border-dashed border-gray-300 text-center text-gray-600">
-          <h3 className="text-lg font-semibold mb-2">Your Orders</h3>
-          <p className="text-sm">Soon you'll be able to track and manage all your orders here.</p>
-        </div>
+        {/* Orders Section */}
+        <BuyerOrders />
       </div>
     </div>
   );

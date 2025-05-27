@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import FarmerProductCreate from '../FarmerProductCreate';
+import CreateProduct from '../molecules/CreateProduct';
+import Marketplace from '../molecules/Marketplace';
 import {
   BarChart2,
   PlusCircle,
@@ -15,12 +16,14 @@ interface FarmerDashboardProps {
 
 const FarmerDashboard: React.FC<FarmerDashboardProps> = ({ onProductCreated }) => {
   const [showCreateProduct, setShowCreateProduct] = useState(false);
+  const [refreshMarketplace, setRefreshMarketplace] = useState(false);
 
   const toggleCreateProduct = () => {
     setShowCreateProduct((prev) => !prev);
   };
 
   const handleProductCreated = useCallback(() => {
+    setRefreshMarketplace((prev) => !prev);
     onProductCreated(); // Notify parent (e.g., Home) to trigger marketplace refresh
     setShowCreateProduct(false); // Optionally hide the form after creation
   }, [onProductCreated]);
@@ -68,9 +71,15 @@ const FarmerDashboard: React.FC<FarmerDashboardProps> = ({ onProductCreated }) =
         {showCreateProduct && (
           <section className="mt-6 border-t pt-6">
             <h2 className="text-2xl font-semibold text-gray-800 mb-4">New Product Details</h2>
-            <FarmerProductCreate onProductCreated={handleProductCreated} />
+            <CreateProduct onProductCreated={handleProductCreated} />
           </section>
         )}
+
+        {/* Marketplace Section */}
+        <section className="mt-10 border-t pt-6">
+          <h2 className="text-2xl font-semibold text-gray-800 mb-4">Browse Marketplace</h2>
+          <Marketplace refreshTrigger={refreshMarketplace} />
+        </section>
 
         {/* Upcoming Features Section */}
         <section className="mt-10 border-t pt-6">

@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { ethers, BrowserProvider, Contract } from 'ethers';
-import EscrowABI from '../../lib/abis/Escrow.json';
+import EscrowABI from '../../../lib/abis/Escrow.json';
 import { FiSearch, FiAlertCircle, FiLoader, FiCheck, FiX } from 'react-icons/fi';
 import { useContract } from '../../context/ContractContext';
 
